@@ -1,0 +1,227 @@
+# ─── CryptoAI — Configuration Centrale ──────────────────────────
+
+system:
+  name: "CryptoAI"
+  version: "1.0.0"
+  mode: "paper"                        # paper | live | backtest
+  log_level: "INFO"
+  log_format: "json"                   # json | text
+  timezone: "UTC"
+  heartbeat_interval: 60               # secondes
+
+market:
+  watchlist:
+    - "BTC/USDT"
+    - "ETH/USDT"
+    - "BNB/USDT"
+    - "SOL/USDT"
+    - "XRP/USDT"
+    - "ADA/USDT"
+    - "DOGE/USDT"
+    - "LINK/USDT"
+    - "AVAX/USDT"
+    - "SUI/USDT"
+    - "APT/USDT"
+    - "TON/USDT"
+
+  timeframes:
+    - "1m"
+    - "5m"
+    - "15m"
+    - "1h"
+    - "4h"
+    - "1d"
+    - "1w"
+
+  exchanges:
+    primary: "binance"
+    fallback: ["bybit", "okx"]
+    rate_limit_per_minute: 1200
+    websocket_reconnect_delay: 5        # secondes
+
+  data_retention_days: 365
+  purge_interval_hours: 24
+
+analysis:
+  technical:
+    enabled: true
+    update_interval: 60                 # secondes
+    indicators:
+      trend: ["ema_9", "ema_21", "ema_50", "sma_200", "macd", "ichimoku", "adx", "supertrend"]
+      momentum: ["rsi_14", "stoch_rsi", "roc", "williams_r"]
+      volatility: ["bbands", "atr_14", "keltner"]
+      volume: ["obv", "vwap", "mfi", "volume_profile"]
+      patterns: ["donchian", "pivot_points", "fibonacci"]
+
+  orderbook:
+    enabled: true
+    update_interval: 300                # 5 minutes
+    depth: 50                           # niveaux de profondeur
+    min_liquidity_usd: 100000
+
+  onchain:
+    enabled: true
+    update_interval: 900                # 15 minutes
+    providers:
+      - "defillama"                     # TVL gratuit
+      - "glassnode_fallback"            # si API key configurée
+    min_whale_tx_usd: 500000
+
+  sentiment:
+    enabled: true
+    update_interval: 600                # 10 minutes
+    sources:
+      news: true
+      twitter: true
+      reddit: true
+      telegram: true
+    max_sources_per_asset: 50
+    min_confidence: 0.3
+
+ai_agent:
+  fusion_method: "weighted"            # weighted | ml_ensemble | rule_based
+  min_confidence_to_trade: 65           # score / 100
+  max_signals_per_decision: 10
+  explanation_detail: "full"            # full | summary | minimal
+  weights:
+    technical: 0.35
+    onchain: 0.20
+    sentiment: 0.15
+    orderbook: 0.15
+    risk: 0.15
+  ml:
+    enabled: false                      # activer après validation paper trading
+    model_path: "models/ensemble.pkl"
+    retrain_interval_hours: 168         # 7 jours
+
+risk:
+  max_position_size_pct: 25.0          # % du capital
+  max_leverage: 1.0                    # pas de leverage par défaut
+  max_open_positions: 10
+  max_exposure_per_asset_pct: 30.0
+  max_exposure_sector_pct: 50.0
+  max_daily_loss_pct: 5.0
+  max_weekly_loss_pct: 15.0
+  max_monthly_loss_pct: 30.0
+  max_correlation: 0.7
+
+  stop_loss:
+    default_pct: 5.0
+    atr_multiplier: 2.0
+    trailing_activation_pct: 10.0
+    min_hodl_hours: 1
+
+  take_profit:
+    risk_reward_ratio: 2.0
+    partial_take_profits:
+      - { at_pct: 25.0, size_pct: 33.0 }
+      - { at_pct: 50.0, size_pct: 33.0 }
+      - { at_pct: 100.0, size_pct: 34.0 }
+
+  circuit_breaker:
+    market_crash_pct: -8.0             # -8% en 24h = crash
+    volatility_spike: 15.0             # ATR > 15% du prix = spike
+    cooldown_minutes: 60
+    max_triggers_per_day: 2
+
+  correlation_pairs:
+    - ["BTC", "ETH"]
+    - ["SOL", "AVAX"]
+    - ["ADA", "XRP"]
+
+portfolio:
+  allocation_method: "kelly"           # kelly | equal_weight | risk_parity
+  rebalance_interval_hours: 4
+  rebalance_threshold_pct: 10.0        # rebalancer si déviation > 10%
+  cash_reserve_pct: 10.0               # toujours garder 10% en stablecoins
+  max_slippage_pct: 0.5
+
+  strategies:
+    trend_following:
+      enabled: true
+      weight: 0.30
+      params:
+        fast_ema: 9
+        slow_ema: 21
+        adx_threshold: 25
+
+    momentum:
+      enabled: true
+      weight: 0.25
+      params:
+        rsi_period: 14
+        rsi_overbought: 70
+        rsi_oversold: 30
+        lookback_days: 30
+
+    mean_reversion:
+      enabled: true
+      weight: 0.20
+      params:
+        bb_period: 20
+        bb_std: 2.0
+        rsi_lower: 30
+        rsi_upper: 70
+
+    swing_trading:
+      enabled: true
+      weight: 0.25
+      params:
+        min_timeframe: "1h"
+        max_timeframe: "4h"
+        min_confidence: 60
+
+execution:
+  order_type: "limit"                  # limit | market
+  retry_attempts: 3
+  retry_delay_seconds: 1
+  order_timeout_seconds: 30
+  min_order_size_usd: 10
+  max_order_size_usd: 10000
+  slippage_tolerance: 0.002            # 0.2%
+
+  exchanges:
+    binance:
+      enabled: true
+      testnet: true                    # utiliser testnet par défaut
+      ws_endpoint: "wss://stream.binance.com:9443/ws"
+    bybit:
+      enabled: false
+      testnet: true
+    okx:
+      enabled: false
+      testnet: true
+    kraken:
+      enabled: false
+      testnet: false
+    coinbase:
+      enabled: false
+      testnet: false
+
+backtesting:
+  default_start: "2023-01-01"
+  default_end: null                    # jusqu'à aujourd'hui
+  slippage_model: "fixed"             # fixed | volume_based
+  fee_model: "maker_taker"
+  initial_capital: 100000             # USD
+  parallel_runs: 4
+
+monitoring:
+  metrics_port: 9090
+  health_check_interval: 30           # secondes
+  alert_channels:
+    telegram: false
+    email: false
+    webhook: false
+  performance_logging: true
+  decision_logging: true
+  trade_logging: true
+
+security:
+  encryption_algorithm: "AES-256-GCM"
+  key_rotation_days: 30
+  max_api_keys_per_user: 5
+  session_timeout_minutes: 60
+  max_login_attempts: 5
+  block_duration_minutes: 30
+  audit_log_retention_days: 365

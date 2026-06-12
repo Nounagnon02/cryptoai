@@ -1,0 +1,96 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    --bg-primary: #0f1017;
+    --bg-card: #1a1b2e;
+    --bg-hover: #24253a;
+    --border-color: #2a2b3e;
+    --text-primary: #f1f1f6;
+    --text-secondary: #a0a0b8;
+    --accent-green: #00C853;
+    --accent-red: #FF1744;
+    --accent-blue: #2979FF;
+  }
+
+  * {
+    scrollbar-width: thin;
+    scrollbar-color: #2a2b3e transparent;
+  }
+
+  *::-webkit-scrollbar {
+    width: 6px;
+    height: 6px;
+  }
+
+  *::-webkit-scrollbar-track {
+    background: transparent;
+  }
+
+  *::-webkit-scrollbar-thumb {
+    background-color: #2a2b3e;
+    border-radius: 3px;
+  }
+
+  body {
+    @apply bg-surface text-gray-100 antialiased;
+    font-family: "Inter", system-ui, sans-serif;
+  }
+}
+
+@layer components {
+  .card {
+    @apply bg-surface-card border border-surface-border rounded-xl p-6;
+    transition: border-color 0.2s ease, box-shadow 0.2s ease;
+  }
+
+  .card:hover {
+    @apply border-surface-hover;
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.2);
+  }
+
+  .btn-primary {
+    @apply px-4 py-2 bg-crypto-blue text-white rounded-lg font-medium
+           hover:brightness-110 active:brightness-90 transition-all
+           focus:outline-none focus:ring-2 focus:ring-crypto-blue focus:ring-offset-2
+           focus:ring-offset-surface disabled:opacity-50 disabled:cursor-not-allowed;
+  }
+
+  .btn-danger {
+    @apply px-4 py-2 bg-crypto-red text-white rounded-lg font-medium
+           hover:brightness-110 active:brightness-90 transition-all
+           focus:outline-none focus:ring-2 focus:ring-crypto-red focus:ring-offset-2
+           focus:ring-offset-surface;
+  }
+
+  .input {
+    @apply w-full px-3 py-2 bg-surface border border-surface-border rounded-lg
+           text-gray-100 placeholder-gray-500
+           focus:outline-none focus:ring-2 focus:ring-crypto-blue focus:border-transparent
+           transition-all;
+  }
+
+  .label {
+    @apply block text-sm font-medium text-gray-400 mb-1;
+  }
+}
+
+@layer utilities {
+  .text-gradient {
+    @apply bg-gradient-to-r from-crypto-blue to-crypto-green bg-clip-text text-transparent;
+  }
+}
+
+/* ─── Reduced Motion (Accessibility) ─────────────────────── */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}

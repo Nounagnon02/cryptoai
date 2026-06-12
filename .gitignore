@@ -1,0 +1,70 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.egg-info/
+.eggs/
+dist/
+build/
+*.egg
+*.whl
+
+# Virtualenv
+.venv/
+venv/
+env/
+
+# Environment
+.env
+.env.local
+*.key
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Data
+data/*.db
+data/*.sqlite
+data/raw/*
+data/processed/*
+
+# Logs
+logs/*.log
+logs/**/*.log
+
+# Reports
+reports/
+*.html
+
+# Coverage
+htmlcov/
+.coverage
+.coverage.*
+
+# Docker
+.docker/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# ML Models
+models/*.pkl
+models/*.h5
+
+# Config (keep example, ignore real)
+configs/local.yaml
+configs/prod.yaml
+
+# Frontend
+frontend/node_modules/
+frontend/.next/
+frontend/out/
+
+# Test artifacts
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
