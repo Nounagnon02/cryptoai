@@ -68,3 +68,9 @@ frontend/out/
 .pytest_cache/
 .mypy_cache/
 .ruff_cache/
+
+
+# claude et github
+
+.claude/
+.github/

@@ -150,7 +150,7 @@ class CCXTProvider(BaseProvider):
             self._request_count = 0
             self._rate_limit_reset = now + 60
 
-        if self._request_count >= config.get("rate_limit_per_minute", 1200):
+        if self._request_count >= getattr(config, "rate_limit_per_minute", 1200):
             sleep_time = self._rate_limit_reset - now
             if sleep_time > 0:
                 self.logger.warning(

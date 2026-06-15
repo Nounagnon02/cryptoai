@@ -2,10 +2,11 @@
 
 from datetime import UTC, datetime
 
-from fastapi import APIRouter, Query
+from fastapi import APIRouter, HTTPException, Query
 from pydantic import BaseModel, Field
 
-from src.utils.singleton import get_ai_agent
+from src.config import config
+from src.utils.singleton import get_ai_agent, get_live_analysis
 
 router = APIRouter(prefix="/api/v1/ai", tags=["ai"])
 
@@ -33,7 +34,22 @@ class DecisionRecord(BaseModel):
 
 @router.get("/scores", response_model=AIScore)
 async def get_ai_scores(symbol: str = Query(..., description="Symbole a analyser")):
-    """Scores IA pour un symbole."""
+    """Scores IA pour un symbole (données live du background loop)."""
+    # 1. Live analysis store (priorité)
+    live = get_live_analysis(symbol)
+    if live is not None:
+        return AIScore(
+            symbol=symbol.upper(),
+            overall_score=round(live["score"], 1),
+            direction=live["direction"],
+            confidence=round(live["confidence"] / 100, 2) if live["confidence"] > 0 else 0.5,
+            technical_score=round(live.get("source_signals", {}).get("technical", {}).get("score", live["score"]), 1),
+            onchain_score=round(live.get("source_signals", {}).get("onchain", {}).get("score", 0), 1) or None,
+            sentiment_score=round(live.get("source_signals", {}).get("social", {}).get("score", 0), 1) or None,
+            reason=live.get("explanation", live.get("reasoning", ["Analyse IA en cours"])[0]),
+        )
+
+    # 2. AI Agent singleton
     agent = get_ai_agent()
     if agent is not None:
         try:
@@ -63,6 +79,8 @@ async def get_ai_scores(symbol: str = Query(..., description="Symbole a analyser
             )
         except Exception:
             pass
+
+    # 3. Fallback mock
     return AIScore(
         symbol=symbol.upper(),
         overall_score=72.5,
@@ -79,14 +97,74 @@ async def get_ai_scores(symbol: str = Query(..., description="Symbole a analyser
     )
 
 
+@router.get("/live/{symbol}", response_model=AIScore)
+async def get_live_ai_scores(symbol: str):
+    """Analyse IA en DIRECT : fetch Binance + analyse technique temps réel."""
+    try:
+        from src.data.market.provider import CCXTProvider
+        from src.analysis.technical.engine import TechnicalAnalysisEngine
+
+        provider = CCXTProvider(exchange_name="binance", testnet=False)
+        df_1h = await provider.fetch_ohlcv(symbol, timeframe="1h", limit=200)
+        df_4h = await provider.fetch_ohlcv(symbol, timeframe="4h", limit=100)
+        df_15m = await provider.fetch_ohlcv(symbol, timeframe="15m", limit=100)
+        ticker = await provider.fetch_ticker(symbol)
+        await provider.close()
+
+        if df_1h.empty:
+            raise HTTPException(status_code=404, detail=f"Symbole {symbol} non trouvé sur Binance")
+
+        engine = TechnicalAnalysisEngine()
+        await engine.start()
+        score = await engine.analyze(symbol, {"1h": df_1h, "4h": df_4h, "15m": df_15m})
+        await engine.stop()
+
+        return AIScore(
+            symbol=symbol.upper(),
+            overall_score=round(score.total_score, 1),
+            direction=score.direction,
+            confidence=round(abs(score.total_score - 50) / 50, 2),
+            technical_score=round(score.total_score, 1),
+            onchain_score=None,
+            sentiment_score=None,
+            reason="; ".join(score.key_signals[:3]) if score.key_signals else f"Analyse technique: {score.direction} ({score.total_score:.0f}/100)",
+        )
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Erreur analyse: {str(e)}") from e
+
+
 @router.get("/decisions", response_model=list[DecisionRecord])
 async def get_recent_decisions(limit: int = Query(10, ge=1, le=100)):
-    """Decisions recentes de l'IA."""
+    """Décisions récentes de l'IA (données live du background loop)."""
+    decisions: list[DecisionRecord] = []
+
+    # 1. Live analysis store
+    for sym in config.watchlist[:5]:
+        live = get_live_analysis(sym)
+        if live is not None:
+            reason = live.get("explanation") or ""
+            if not isinstance(reason, str):
+                reasoning = live.get("reasoning", [])
+                reason = reasoning[0] if reasoning else ""
+            decisions.append(DecisionRecord(
+                timestamp=live.get("timestamp", datetime.now(UTC).isoformat()),
+                symbol=sym,
+                action=live.get("action", "hold"),
+                score=round(live.get("score", 50), 1),
+                confidence=round(live.get("confidence", 50) / 100, 2),
+                direction=live.get("direction", "neutral"),
+                reason=reason[:200],
+            ))
+    if decisions:
+        return decisions[:limit]
+
+    # 2. AI Agent singleton
     agent = get_ai_agent()
     if agent is not None:
         try:
-            decisions = []
-            for sym in ["BTC/USDT", "ETH/USDT", "SOL/USDT"]:
+            for sym in config.watchlist[:3]:
                 last = agent.get_last_decision(sym)
                 if last is not None:
                     decisions.append(DecisionRecord(
@@ -102,6 +180,8 @@ async def get_recent_decisions(limit: int = Query(10, ge=1, le=100)):
                 return decisions[:limit]
         except Exception:
             pass
+
+    # 3. Fallback mock
     now = datetime.now(UTC).isoformat()
     decisions = [
         DecisionRecord(

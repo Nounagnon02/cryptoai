@@ -55,7 +55,17 @@
       "Edit(~/.claude/skills/seo-technical-elite/**)",
       "Edit(~/.claude/skills/ux-research-elite/**)",
       "Edit(~/.claude/skills/web-audit-complet/**)",
-      "Bash(git commit -m 'feat: complete CryptoAI platform — all 18 phases, tests, audit fixes *)"
+      "Bash(git commit -m 'feat: complete CryptoAI platform — all 18 phases, tests, audit fixes *)",
+      "Bash(gh auth *)",
+      "Bash(gh repo *)",
+      "Bash(docker compose *)",
+      "Bash(docker info *)",
+      "Bash(docker-compose up *)",
+      "Bash(docker pull *)",
+      "Bash(sudo lsof -i :5432 -i :6379)",
+      "Bash(pg_isready -h 127.0.0.1 -p 5432)",
+      "Bash(redis-cli -h 127.0.0.1 -p 6379 ping)",
+      "Bash(curl -s -o /dev/null -w \"%{http_code}\" http://localhost:3000)"
     ],
     "additionalDirectories": [
       "/home/kangbodenounagnonprince/.claude/skills",

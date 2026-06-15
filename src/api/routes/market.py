@@ -6,6 +6,7 @@ from fastapi import APIRouter, Depends, HTTPException, Path, Query
 
 from src.config import config
 from src.utils.security.validator import default_validator
+from src.utils.singleton import get_all_live_market_data, get_live_market_data
 
 router = APIRouter(prefix="/api/v1/market", tags=["market"])
 
@@ -85,6 +86,81 @@ async def get_ohlcv(
         }
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e)) from e
+
+
+@router.get("/live/{symbol}")
+async def get_live_data(symbol: str = Depends(validate_symbol_param)):
+    """Récupère les données en DIRECT depuis Binance (aucun cache)."""
+    try:
+        from src.data.market.provider import CCXTProvider
+        provider = CCXTProvider(exchange_name="binance", testnet=False)
+
+        ohlcv_df = await provider.fetch_ohlcv(symbol, timeframe="1h", limit=24)
+        ticker = await provider.fetch_ticker(symbol)
+        ob = await provider.fetch_order_book(symbol, limit=10)
+        await provider.close()
+
+        ohlcv_data = []
+        for _, row in ohlcv_df.iterrows():
+            ohlcv_data.append({
+                "open": round(float(row["open"]), 2),
+                "high": round(float(row["high"]), 2),
+                "low": round(float(row["low"]), 2),
+                "close": round(float(row["close"]), 2),
+                "volume": round(float(row["volume"]), 2),
+            })
+
+        bids = [{"price": round(float(b.price), 2), "amount": round(float(b.value_usd / b.price), 4)}
+                for b in ob.bids[:5]]
+        asks = [{"price": round(float(a.price), 2), "amount": round(float(a.value_usd / a.price), 4)}
+                for a in ob.asks[:5]]
+
+        return {
+            "symbol": symbol,
+            "source": "binance",
+            "timestamp": datetime.now(UTC).isoformat(),
+            "ticker": {
+                "last": round(ticker.last, 2),
+                "bid": round(ticker.bid, 2),
+                "ask": round(ticker.ask, 2),
+                "volume_24h": round(ticker.volume_24h, 2),
+                "change_24h": round(ticker.change_24h, 2),
+            },
+            "orderbook": {"bids": bids[:3], "asks": asks[:3], "spread": round(ob.spread, 2)},
+            "ohlcv": ohlcv_data[-1] if ohlcv_data else None,
+            "trend": "bullish" if ohlcv_data and ohlcv_data[-1]["close"] > ohlcv_data[0]["close"] else "bearish",
+            "range_24h": {
+                "high": max(d["high"] for d in ohlcv_data) if ohlcv_data else 0,
+                "low": min(d["low"] for d in ohlcv_data) if ohlcv_data else 0,
+            } if ohlcv_data else None,
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Erreur Binance: {str(e)}") from e
+
+
+@router.get("/overview")
+async def get_market_overview():
+    """Vue d'ensemble du marché : tickers + analyses live pour tous les symboles watchlist."""
+    live_data = get_all_live_market_data()
+    overview = []
+    for symbol in config.watchlist:
+        data = live_data.get(symbol) or get_live_market_data(symbol)
+        if data and "ticker" in data:
+            entry = {
+                "symbol": symbol,
+                "ticker": data["ticker"],
+                "last_ohlcv": data.get("last_ohlcv"),
+                "updated_at": data.get("_updated_at", ""),
+            }
+        else:
+            entry = {
+                "symbol": symbol,
+                "ticker": None,
+                "last_ohlcv": None,
+                "updated_at": None,
+            }
+        overview.append(entry)
+    return {"symbols": overview, "count": len(overview), "timestamp": datetime.now(UTC).isoformat()}
 
 
 @router.get("/watchlist")

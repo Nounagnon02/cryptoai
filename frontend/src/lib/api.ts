@@ -100,8 +100,8 @@ export interface AIScore {
   direction: string;
   confidence: number;
   technical_score: number;
-  onchain_score: number;
-  sentiment_score: number;
+  onchain_score: number | null;
+  sentiment_score: number | null;
   reason: string;
 }
 
@@ -142,6 +142,37 @@ export interface MetricsResponse {
   cagr: number;
 }
 
+// ---- Live market types ----
+
+export interface TickerData {
+  last: number;
+  bid: number;
+  ask: number;
+  volume_24h: number;
+  change_24h: number;
+}
+
+export interface OhlcvPoint {
+  open: number;
+  high: number;
+  low: number;
+  close: number;
+  volume: number;
+}
+
+export interface MarketSymbolData {
+  symbol: string;
+  ticker: TickerData | null;
+  last_ohlcv: OhlcvPoint | null;
+  updated_at: string | null;
+}
+
+export interface MarketOverview {
+  symbols: MarketSymbolData[];
+  count: number;
+  timestamp: string;
+}
+
 // ---- API functions ----
 
 export function getPortfolioSummary(): Promise<PortfolioSummary | null> {
@@ -174,4 +205,26 @@ export function getExecutionStats(): Promise<ExecutionStats | null> {
 
 export function getPerformanceSummary(): Promise<PerformanceSummary | null> {
   return fetchApi<PerformanceSummary>("/performance/summary");
+}
+
+// ---- Live data endpoints ----
+
+export function getMarketOverview(): Promise<MarketOverview | null> {
+  return fetchApi<MarketOverview>("/market/overview");
+}
+
+export function getLiveAIScores(symbol: string): Promise<AIScore | null> {
+  return fetchApi<AIScore>(`/ai/live/${symbol}`);
+}
+
+export function getLivePortfolioSummary(): Promise<PortfolioSummary | null> {
+  return fetchApi<PortfolioSummary>("/portfolio/summary");
+}
+
+export function getLivePortfolioState(): Promise<PortfolioState | null> {
+  return fetchApi<PortfolioState>("/portfolio/state");
+}
+
+export function getLiveExecutionStats(): Promise<ExecutionStats | null> {
+  return fetchApi<ExecutionStats>("/execution/stats");
 }

@@ -7,19 +7,24 @@ import {
   TrendingUp,
   BarChart3,
   Activity,
+  Coins,
 } from "lucide-react";
 import DashboardCard from "@/components/DashboardCard";
 import ScoreCard from "@/components/ScoreCard";
 import PerformanceChart from "@/components/PerformanceChart";
 import {
-  getPortfolioSummary,
+  getLivePortfolioSummary,
   getPerformanceSummary,
   getAIScores,
+  getLiveExecutionStats,
   getRecentDecisions,
+  getMarketOverview,
   PortfolioSummary,
   PerformanceSummary,
   AIScore,
   DecisionRecord,
+  MarketOverview,
+  MarketSymbolData,
 } from "@/lib/api";
 
 function formatUSD(value: number): string {
@@ -32,11 +37,32 @@ function formatPercent(value: number): string {
   return `${value >= 0 ? "+" : ""}${value.toFixed(2)}%`;
 }
 
+function getActionColor(action: string): string {
+  switch (action) {
+    case "strong_buy":
+    case "buy":
+      return "bg-green-500/10 text-green-400";
+    case "strong_sell":
+    case "sell":
+      return "bg-red-500/10 text-red-400";
+    case "reduce":
+      return "bg-orange-500/10 text-orange-400";
+    default:
+      return "bg-blue-500/10 text-blue-400";
+  }
+}
+
 export default function DashboardOverview() {
+  const { data: marketOv, isLoading: loadingMarket } = useQuery<MarketOverview | null>({
+    queryKey: ["market-overview"],
+    queryFn: getMarketOverview,
+    refetchInterval: 10_000,
+  });
+
   const { data: summary, isLoading: loadingSummary } = useQuery<PortfolioSummary | null>({
-    queryKey: ["portfolio-summary"],
-    queryFn: getPortfolioSummary,
-    refetchInterval: 30_000,
+    queryKey: ["live-portfolio-summary"],
+    queryFn: getLivePortfolioSummary,
+    refetchInterval: 15_000,
   });
 
   const { data: perf, isLoading: loadingPerf } = useQuery<PerformanceSummary | null>({
@@ -46,16 +72,18 @@ export default function DashboardOverview() {
   });
 
   const { data: aiScore, isLoading: loadingScore } = useQuery<AIScore | null>({
-    queryKey: ["ai-scores"],
+    queryKey: ["ai-scores-live"],
     queryFn: () => getAIScores("BTC/USDT"),
-    refetchInterval: 30_000,
+    refetchInterval: 15_000,
   });
 
   const { data: decisions, isLoading: loadingDecisions } = useQuery<DecisionRecord[] | null>({
-    queryKey: ["recent-decisions"],
+    queryKey: ["recent-decisions-live"],
     queryFn: () => getRecentDecisions(5),
-    refetchInterval: 30_000,
+    refetchInterval: 15_000,
   });
+
+  const topSymbols = marketOv?.symbols?.filter(s => s.ticker !== null).slice(0, 4) ?? [];
 
   return (
     <div className="space-y-6">
@@ -63,9 +91,32 @@ export default function DashboardOverview() {
       <div>
         <h1 className="text-2xl font-bold text-white">Dashboard</h1>
         <p className="text-sm text-gray-400 mt-1">
-          Real-time portfolio overview and AI trading signals
+          Live paper trading · Données Binace mises à jour toutes les 10s
         </p>
       </div>
+
+      {/* Live market prices row */}
+      {topSymbols.length > 0 && (
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+          {topSymbols.map((s: MarketSymbolData) => (
+            <div key={s.symbol} className="card py-3 px-4 flex items-center justify-between">
+              <div>
+                <p className="text-xs font-medium text-gray-500">{s.symbol.replace("/USDT", "")}</p>
+                <p className="text-base font-semibold text-white tabular-nums">
+                  ${s.ticker!.last.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                </p>
+              </div>
+              <span
+                className={`text-xs font-medium tabular-nums ${
+                  s.ticker!.change_24h >= 0 ? "text-green-400" : "text-red-400"
+                }`}
+              >
+                {formatPercent(s.ticker!.change_24h)}
+              </span>
+            </div>
+          ))}
+        </div>
+      )}
 
       {/* Metric cards */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
@@ -80,7 +131,7 @@ export default function DashboardOverview() {
           loading={loadingSummary}
         />
         <DashboardCard
-          title="24h P&L"
+          title="Total P&L"
           value={summary ? formatUSD(summary.pnl_24h_usd) : "—"}
           change={summary?.pnl_24h_pct}
           changeType={
@@ -138,7 +189,7 @@ export default function DashboardOverview() {
             ))}
           </div>
         ) : !decisions || decisions.length === 0 ? (
-          <p className="text-sm text-gray-500">No decisions recorded yet.</p>
+          <p className="text-sm text-gray-500">No decisions recorded yet. The background AI analysis is initializing…</p>
         ) : (
           <div className="overflow-x-auto">
             <table className="w-full text-sm" role="table">
@@ -159,8 +210,8 @@ export default function DashboardOverview() {
                     </td>
                     <td className="py-2 pr-4 font-medium text-white">{d.symbol}</td>
                     <td className="py-2 pr-4">
-                      <span className="px-2 py-0.5 rounded text-xs font-medium bg-crypto-blue/10 text-crypto-blue">
-                        {d.action}
+                      <span className={`px-2 py-0.5 rounded text-xs font-medium ${getActionColor(d.action)}`}>
+                        {d.action.replace("_", " ")}
                       </span>
                     </td>
                     <td className="py-2 pr-4 text-right tabular-nums text-gray-300">{d.score.toFixed(0)}</td>
