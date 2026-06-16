@@ -147,6 +147,61 @@ class BacktestResult:
     errors_count: int = 0
 
 
+@dataclass
+class WalkForwardWindow:
+    """Résultat d'une fenêtre de walk-forward validation."""
+
+    window_index: int
+    train_start: datetime
+    train_end: datetime
+    test_start: datetime
+    test_end: datetime
+    train_bars: int
+    test_bars: int
+    result: BacktestResult | None = None
+    status: str = "pending"  # pending | running | completed | failed
+    error: str | None = None
+
+
+@dataclass
+class WalkForwardResult:
+    """Résultat agrégé de walk-forward validation."""
+
+    # Configuration
+    strategy_name: str
+    symbol: str
+    timeframe: str
+    total_windows: int
+    completed_windows: int
+
+    # Métriques out-of-sample agrégées
+    windows: list[WalkForwardWindow] = field(default_factory=list)
+
+    # Agrégation OOS
+    total_return_pct_oos: float = 0.0
+    sharpe_ratio_oos: float = 0.0
+    sortino_ratio_oos: float = 0.0
+    max_drawdown_pct_oos: float = 0.0
+    win_rate_oos: float = 0.0
+    profit_factor_oos: float = 0.0
+
+    # Stabilité
+    window_returns: list[float] = field(default_factory=list)
+    return_std: float = 0.0  # Écart-type des returns OOS — plus bas = plus stable
+    consistency_score: float = 0.0  # % de fenêtres positives
+
+    # Benchmarks
+    benchmark_return_pct_oos: float = 0.0
+    alpha_vs_benchmark: float = 0.0  # Exces de rendement vs buy-and-hold
+
+    # Robustesse
+    is_robust: bool = False
+    robustness_issues: list[str] = field(default_factory=list)
+
+    # Résumé
+    summary: str = ""
+
+
 class BacktestEngine:
     """
     Moteur de backtest principal.
@@ -570,6 +625,301 @@ class BacktestEngine:
         elif ema_short < ema_long and price < ema_short:
             return "bearish"
         return "neutral"
+
+    async def walk_forward_validate(
+        self,
+        ohlcv_data: list[OHLCV],
+        strategy_name: str,
+        symbol: str,
+        timeframe: str,
+        train_size_bars: int = 500,
+        test_size_bars: int = 100,
+        step_bars: int = 100,
+        min_train_bars: int = 200,
+        progress_callback: Callable[[int, int], None] | None = None,
+    ) -> WalkForwardResult:
+        """
+        Walk-Forward Validation — validation hors-échantillon par fenêtres glissantes.
+
+        Principe :
+        1. Diviser les données en fenêtres [train, test] glissantes
+        2. Pour chaque fenêtre : entraîner/calibrer sur train, backtest sur test
+        3. Agréger les métriques out-of-sample sur toutes les fenêtres
+        4. Évaluer la robustesse (stabilité des returns, consistance)
+
+        Cette méthode est le gold standard pour valider qu'une stratégie
+        n'est pas overfittée. Les métriques OOS sont le véritable indicateur
+        de performance future.
+
+        Args:
+            ohlcv_data: Données OHLCV historiques complètes
+            strategy_name: Stratégie à valider
+            symbol: Paire de trading
+            timeframe: Timeframe
+            train_size_bars: Nombre de barres par fenêtre d'entraînement
+            test_size_bars: Nombre de barres par fenêtre de test
+            step_bars: Pas de glissement entre fenêtres
+            min_train_bars: Minimum de barres pour la première fenêtre
+            progress_callback: Callback (current, total) pour suivi
+
+        Returns:
+            WalkForwardResult avec métriques OOS agrégées et diagnostic de robustesse
+        """
+        if not ohlcv_data:
+            raise ValueError("No OHLCV data provided for walk-forward validation")
+
+        strategy = self._strategies.get(strategy_name)
+        if not strategy:
+            raise ValueError(f"Unknown strategy: '{strategy_name}'. Available: {list(self._strategies.keys())}")
+
+        total_bars = len(ohlcv_data)
+        min_required = min_train_bars + test_size_bars
+        if total_bars < min_required:
+            raise ValueError(
+                f"Not enough data for walk-forward: need at least {min_required} bars, "
+                f"got {total_bars}"
+            )
+
+        # ── 1. Build windows ──
+        windows: list[WalkForwardWindow] = []
+        window_idx = 0
+        train_end = min_train_bars
+
+        while train_end + test_size_bars <= total_bars:
+            train_start = max(0, train_end - train_size_bars)
+            test_start = train_end
+            test_end = min(train_end + test_size_bars, total_bars)
+
+            wf = WalkForwardWindow(
+                window_index=window_idx,
+                train_start=ohlcv_data[train_start].timestamp,
+                train_end=ohlcv_data[train_end - 1].timestamp,
+                test_start=ohlcv_data[test_start].timestamp,
+                test_end=ohlcv_data[test_end - 1].timestamp,
+                train_bars=train_end - train_start,
+                test_bars=test_end - test_start,
+            )
+            windows.append(wf)
+            window_idx += 1
+            train_end += step_bars
+
+        if not windows:
+            raise ValueError("Could not build any walk-forward windows from the provided data")
+
+        total_windows = len(windows)
+        logger.info(
+            "Walk-forward validation: %s %s | %d windows (train=%d, test=%d, step=%d bars)",
+            strategy_name, symbol, total_windows,
+            train_size_bars, test_size_bars, step_bars,
+        )
+
+        # ── 2. Run backtest on each window ──
+        completed = 0
+        for idx, wf in enumerate(windows):
+            try:
+                wf.status = "running"
+                if progress_callback:
+                    progress_callback(idx + 1, total_windows)
+
+                # Extract window data
+                window_data = ohlcv_data[
+                    wf.window_index * step_bars :
+                    wf.window_index * step_bars + train_size_bars + test_size_bars
+                ]
+                # Use all data up to test_end for training context,
+                # but only evaluate on the test portion
+                train_data = ohlcv_data[: wf.window_index * step_bars + train_size_bars]
+                test_data = ohlcv_data[
+                    wf.window_index * step_bars :
+                    wf.window_index * step_bars + train_size_bars + test_size_bars
+                ]
+
+                # For proper OOS: use only the test portion
+                # Run backtest on the window (train + test for indicator warmup,
+                # but results filtered to test period)
+                test_start_dt = ohlcv_data[wf.window_index * step_bars + train_size_bars].timestamp
+
+                # Build a config that uses the test portion
+                window_config = BacktestConfig(
+                    initial_capital=self.config.initial_capital,
+                    fee_rate=self.config.fee_rate,
+                    slippage_model=self.config.slippage_model,
+                    slippage_bps=self.config.slippage_bps,
+                    warmup_bars=min(50, len(test_data) - 1),
+                    max_positions=self.config.max_positions,
+                    risk_free_rate=self.config.risk_free_rate,
+                )
+                window_engine = BacktestEngine(config=window_config)
+                for name, strat in self._strategies.items():
+                    window_engine.register_strategy(name, strat)
+
+                result = await window_engine.run(
+                    ohlcv_data=test_data,
+                    strategy_name=strategy_name,
+                    symbol=symbol,
+                    timeframe=timeframe,
+                )
+
+                # Filter trades and equity to only OOS period
+                oos_trades = [t for t in result.trades if t.entry_time >= test_start_dt]
+                oos_equity = [e for e in result.equity_curve if e["timestamp"] >= test_start_dt]
+
+                if oos_trades:
+                    # Recalculate metrics on OOS trades only
+                    oos_metrics = PerformanceMetrics()
+                    # Estimate OOS final capital from equity curve
+                    oos_final = oos_equity[-1]["equity"] if oos_equity else self.config.initial_capital
+                    oos_report = oos_metrics.calculate(
+                        initial_capital=self.config.initial_capital,
+                        final_capital=oos_final,
+                        trades=oos_trades,
+                        equity_curve=oos_equity,
+                        risk_free_rate=self.config.risk_free_rate,
+                    )
+                    wf.result = result
+                    wf.result.trades = oos_trades
+                    wf.result.equity_curve = oos_equity
+                    wf.result.total_return_pct = oos_report.total_return_pct
+                    wf.result.sharpe_ratio = oos_report.sharpe_ratio
+                    wf.result.win_rate = oos_report.win_rate
+                else:
+                    wf.result = result
+                    wf.result.trades = []
+                    wf.result.total_return_pct = 0.0
+
+                wf.status = "completed"
+                completed += 1
+
+            except Exception as exc:
+                logger.error("Walk-forward window %d failed: %s", idx, exc)
+                wf.status = "failed"
+                wf.error = str(exc)
+
+        # ── 3. Aggregate OOS metrics ──
+        completed_windows = [w for w in windows if w.status == "completed" and w.result is not None]
+        n_completed = len(completed_windows)
+
+        if n_completed == 0:
+            return WalkForwardResult(
+                strategy_name=strategy_name,
+                symbol=symbol,
+                timeframe=timeframe,
+                total_windows=total_windows,
+                completed_windows=0,
+                windows=windows,
+                summary="No windows completed successfully.",
+            )
+
+        # Aggregate
+        returns = [w.result.total_return_pct for w in completed_windows]
+        sharpes = [w.result.sharpe_ratio for w in completed_windows if w.result.sharpe_ratio is not None]
+        sortinos = [w.result.sortino_ratio for w in completed_windows if w.result.sortino_ratio is not None]
+        drawdowns = [w.result.max_drawdown_pct for w in completed_windows]
+        win_rates = [w.result.win_rate for w in completed_windows if w.result.total_trades > 0]
+        profit_factors = [w.result.profit_factor for w in completed_windows if w.result.total_trades > 0]
+        benchmarks = [w.result.benchmark_return_pct for w in completed_windows]
+
+        avg_return = sum(returns) / n_completed
+        avg_sharpe = sum(sharpes) / len(sharpes) if sharpes else 0.0
+        avg_sortino = sum(sortinos) / len(sortinos) if sortinos else 0.0
+        avg_drawdown = sum(drawdowns) / n_completed
+        avg_win_rate = sum(win_rates) / len(win_rates) if win_rates else 0.0
+        avg_profit_factor = sum(profit_factors) / len(profit_factors) if profit_factors else 0.0
+        avg_benchmark = sum(benchmarks) / n_completed
+
+        # Stability: standard deviation of returns
+        return_std = float(np.std(returns)) if len(returns) >= 2 else 0.0
+
+        # Consistency: % of positive windows
+        positive_windows = sum(1 for r in returns if r > 0)
+        consistency = positive_windows / n_completed
+
+        # ── 4. Robustness diagnostics ──
+        robustness_issues: list[str] = []
+        is_robust = True
+
+        # Check 1: Average Sharpe < 0 → strategy is worse than risk-free
+        if avg_sharpe < 0:
+            robustness_issues.append("Sharpe ratio OOS négatif — stratégie sous-performante vs risk-free")
+            is_robust = False
+
+        # Check 2: Return standard deviation > 2x mean return → unstable
+        if return_std > abs(avg_return) * 2 and abs(avg_return) > 0.1:
+            robustness_issues.append(
+                f"Haute volatilité des returns OOS (σ={return_std:.1f}% vs μ={avg_return:.1f}%)"
+            )
+            is_robust = False
+
+        # Check 3: Consistency < 50% → more losing than winning windows
+        if consistency < 0.50:
+            robustness_issues.append(
+                f"Moins de 50% de fenêtres positives (consistency={consistency*100:.0f}%)"
+            )
+            is_robust = False
+
+        # Check 4: Max drawdown > 50% → catastrophic risk
+        if avg_drawdown > 50:
+            robustness_issues.append(f"Drawdown OOS moyen > 50% ({avg_drawdown:.1f}%)")
+            is_robust = False
+
+        # Check 5: Negative alpha vs benchmark
+        alpha = avg_return - avg_benchmark
+        if alpha < -5:
+            robustness_issues.append(
+                f"Alpha OOS négatif vs benchmark ({alpha:.1f}% vs buy-and-hold {avg_benchmark:.1f}%)"
+            )
+            is_robust = False
+
+        # ── 5. Summary ──
+        stable = "✓ STABLE" if return_std < abs(avg_return) * 0.5 else "⚠ VOLATILE"
+        consistent_label = "✓ CONSISTANT" if consistency >= 0.75 else "⚠ INCONSISTANT"
+
+        summary_lines = [
+            f"Walk-Forward Validation: {strategy_name} sur {symbol} ({timeframe})",
+            f"Fenêtres: {n_completed}/{total_windows} complétées",
+            f"",
+            f"Performance Out-of-Sample:",
+            f"  Return moyen: {avg_return:+.2f}%  |  Sharpe: {avg_sharpe:.2f}  |  Sortino: {avg_sortino:.2f}",
+            f"  Win Rate: {avg_win_rate*100:.0f}%  |  Profit Factor: {avg_profit_factor:.2f}  |  Drawdown: {avg_drawdown:.1f}%",
+            f"",
+            f"Stabilité:  {stable}  (σ returns = {return_std:.1f}%)",
+            f"Consistance: {consistent_label}  ({positive_windows}/{n_completed} fenêtres positives)",
+            f"Alpha vs B&H: {alpha:+.1f}%",
+            f"",
+            f"Verdict: {'ROBUSTE ✓' if is_robust else 'NON ROBUSTE ✗ — voir issues ci-dessous'}",
+        ]
+        if robustness_issues:
+            summary_lines.append("")
+            summary_lines.append(f"Issues ({len(robustness_issues)}):")
+            for issue in robustness_issues:
+                summary_lines.append(f"  ✗ {issue}")
+
+        summary = "\n".join(summary_lines)
+        logger.info("Walk-forward complete: robust=%s, consistency=%.0f%%, sharpe=%.2f",
+                     is_robust, consistency * 100, avg_sharpe)
+
+        return WalkForwardResult(
+            strategy_name=strategy_name,
+            symbol=symbol,
+            timeframe=timeframe,
+            total_windows=total_windows,
+            completed_windows=n_completed,
+            windows=windows,
+            total_return_pct_oos=round(avg_return, 2),
+            sharpe_ratio_oos=round(avg_sharpe, 3),
+            sortino_ratio_oos=round(avg_sortino, 3),
+            max_drawdown_pct_oos=round(avg_drawdown, 2),
+            win_rate_oos=round(avg_win_rate, 3),
+            profit_factor_oos=round(avg_profit_factor, 2),
+            window_returns=[round(r, 2) for r in returns],
+            return_std=round(return_std, 2),
+            consistency_score=round(consistency, 3),
+            benchmark_return_pct_oos=round(avg_benchmark, 2),
+            alpha_vs_benchmark=round(alpha, 2),
+            is_robust=is_robust,
+            robustness_issues=robustness_issues,
+            summary=summary,
+        )
 
     # ---------------------------------------------------------------------------
     # Extracted sub-methods from run()

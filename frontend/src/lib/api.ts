@@ -114,6 +114,11 @@ export interface ExecutionStats {
   total_volume_usd: number;
 }
 
+export interface MonthlyReturn {
+  month: string;
+  return_pct: number;
+}
+
 export interface PerformanceSummary {
   sharpe_ratio: number;
   sortino_ratio: number;
@@ -124,6 +129,7 @@ export interface PerformanceSummary {
   cagr: number;
   total_return_pct: number;
   equity_curve: EquityPoint[];
+  monthly_returns: MonthlyReturn[];
 }
 
 export interface EquityPoint {
@@ -207,6 +213,80 @@ export function getPerformanceSummary(): Promise<PerformanceSummary | null> {
   return fetchApi<PerformanceSummary>("/performance/summary");
 }
 
+// ---- Settings types ----
+
+export interface StrategySetting {
+  name: string;
+  label: string;
+  enabled: boolean;
+  allocation: number;
+}
+
+export interface RiskSetting {
+  max_drawdown_pct: number;
+  max_position_size_pct: number;
+}
+
+export interface ApiKeySetting {
+  exchange: string;
+  key_preview: string;
+  has_key: boolean;
+}
+
+export interface SettingsResponse {
+  strategies: StrategySetting[];
+  risk: RiskSetting;
+  api_keys: ApiKeySetting[];
+  trading_mode: string;
+}
+
+export function getSettings(): Promise<SettingsResponse | null> {
+  return fetchApi<SettingsResponse>("/settings");
+}
+
+export function updateSettings(data: {
+  strategies?: StrategySetting[];
+  risk?: RiskSetting;
+  trading_mode?: string;
+}): Promise<SettingsResponse | null> {
+  return fetchApi<SettingsResponse>("/settings", {
+    method: "PUT",
+    body: JSON.stringify(data),
+  });
+}
+
+export interface ApiKeyAddRequest {
+  exchange: string;
+  api_key: string;
+  api_secret: string;
+}
+
+export interface ApiKeyTestResult {
+  success: boolean;
+  message: string;
+  exchange: string;
+}
+
+export function addApiKey(data: ApiKeyAddRequest): Promise<SettingsResponse | null> {
+  return fetchApi<SettingsResponse>("/settings/keys", {
+    method: "PUT",
+    body: JSON.stringify(data),
+  });
+}
+
+export function deleteApiKey(exchange: string): Promise<SettingsResponse | null> {
+  return fetchApi<SettingsResponse>(`/settings/keys/${exchange}`, {
+    method: "DELETE",
+  });
+}
+
+export function testApiKey(exchange: string, apiKey: string, apiSecret: string): Promise<ApiKeyTestResult | null> {
+  return fetchApi<ApiKeyTestResult>("/settings/keys/test", {
+    method: "POST",
+    body: JSON.stringify({ exchange, api_key: apiKey, api_secret: apiSecret }),
+  });
+}
+
 // ---- Live data endpoints ----
 
 export function getMarketOverview(): Promise<MarketOverview | null> {
@@ -227,4 +307,125 @@ export function getLivePortfolioState(): Promise<PortfolioState | null> {
 
 export function getLiveExecutionStats(): Promise<ExecutionStats | null> {
   return fetchApi<ExecutionStats>("/execution/stats");
+}
+
+// ---- Trade history types ----
+
+export interface TradeEntry {
+  trade_id: string;
+  symbol: string;
+  side: string;
+  quantity: number;
+  price: number;
+  value_usd: number;
+  fee: number;
+  pnl: number;
+  pnl_pct: number;
+  timestamp: string;
+  strategy: string;
+  status: string;
+}
+
+export interface TradeHistoryResponse {
+  trades: TradeEntry[];
+  total: number;
+}
+
+export function getTradeHistory(
+  limit = 50,
+  symbol?: string
+): Promise<TradeHistoryResponse | null> {
+  return fetchApi<TradeHistoryResponse>("/trades/history", {
+    params: { limit, symbol },
+  });
+}
+
+export function getTradeExportUrl(symbol?: string): string {
+  const params = new URLSearchParams({ format: "csv" });
+  if (symbol) params.set("symbol", symbol);
+  return `${API_BASE_URL}/trades/export?${params.toString()}`;
+}
+
+// ---- Screener types ----
+
+export interface ScreenerItem {
+  symbol: string;
+  last_price: number;
+  change_24h_pct: number;
+  volume_24h: number;
+  bid: number;
+  ask: number;
+}
+
+export interface ScreenerResponse {
+  top_gainers: ScreenerItem[];
+  top_losers: ScreenerItem[];
+  timestamp: string;
+}
+
+export function getScreener(
+  limit = 10,
+  sortBy = "change_24h"
+): Promise<ScreenerResponse | null> {
+  return fetchApi<ScreenerResponse>("/market/screener", {
+    params: { limit, sort_by: sortBy },
+  });
+}
+
+// ---- Backtest types ----
+
+export interface BacktestRunRequest {
+  strategy: string;
+  symbol: string;
+  timeframe: string;
+  start_date?: string;
+  end_date?: string;
+  initial_capital: number;
+}
+
+export interface BacktestTradeEntry {
+  timestamp: string;
+  symbol: string;
+  side: string;
+  quantity: number;
+  price: number;
+  pnl: number;
+  pnl_pct: number;
+}
+
+export interface BacktestResult {
+  run_id: string;
+  status: string;
+  config: BacktestRunRequest;
+  metrics: Record<string, number> | null;
+  equity_curve: { timestamp: string; equity: number }[];
+  trades: BacktestTradeEntry[];
+  benchmark_return_pct: number;
+  started_at: string;
+  completed_at: string | null;
+}
+
+export interface BacktestStatus {
+  run_id: string;
+  status: string;
+  progress_pct: number;
+  started_at: string;
+  completed_at: string | null;
+}
+
+export function runBacktest(data: BacktestRunRequest): Promise<BacktestStatus | null> {
+  return fetchApi<BacktestStatus>("/backtest/run", {
+    method: "POST",
+    body: JSON.stringify(data),
+  });
+}
+
+export function getBacktestResult(runId: string): Promise<BacktestResult | null> {
+  return fetchApi<BacktestResult>(`/backtest/result/${runId}`);
+}
+
+export function listBacktestResults(limit = 10): Promise<BacktestStatus[] | null> {
+  return fetchApi<BacktestStatus[]>("/backtest/results", {
+    params: { limit },
+  });
 }

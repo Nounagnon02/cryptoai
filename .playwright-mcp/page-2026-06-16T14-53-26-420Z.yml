@@ -1,0 +1,82 @@
+- generic [ref=e2]:
+  - navigation "Main navigation" [ref=e3]:
+    - generic [ref=e4]:
+      - img [ref=e6]
+      - generic [ref=e8]:
+        - heading "CryptoAI" [level=1] [ref=e9]
+        - paragraph [ref=e10]: Trading Platform
+    - navigation "Sidebar" [ref=e11]:
+      - link "Dashboard" [ref=e12] [cursor=pointer]:
+        - /url: /
+        - img [ref=e13]
+        - text: Dashboard
+      - link "Portfolio" [ref=e18] [cursor=pointer]:
+        - /url: /portfolio
+        - img [ref=e19]
+        - text: Portfolio
+      - link "Performance" [ref=e22] [cursor=pointer]:
+        - /url: /performance
+        - img [ref=e23]
+        - text: Performance
+      - link "Backtest" [ref=e26] [cursor=pointer]:
+        - /url: /backtest
+        - img [ref=e27]
+        - text: Backtest
+      - link "Trades" [ref=e29] [cursor=pointer]:
+        - /url: /trades
+        - img [ref=e30]
+        - text: Trades
+      - link "Settings" [ref=e34] [cursor=pointer]:
+        - /url: /settings
+        - img [ref=e35]
+        - text: Settings
+    - generic [ref=e38]:
+      - button "Switch to light theme" [ref=e39] [cursor=pointer]:
+        - img [ref=e40]
+        - generic [ref=e46]: Light Mode
+      - generic [ref=e51]: System Operational
+  - main [ref=e52]:
+    - generic [ref=e53]:
+      - generic [ref=e54]:
+        - heading "Backtest" [level=1] [ref=e55]
+        - paragraph [ref=e56]: Test your strategies against historical data
+      - generic [ref=e57]:
+        - heading "Configuration" [level=3] [ref=e58]
+        - generic [ref=e59]:
+          - generic [ref=e60]:
+            - generic [ref=e61]: Strategy
+            - combobox "Strategy" [ref=e62]:
+              - option "Trend Following (EMA crossover)" [selected]
+              - option "Momentum (RSI + ROC)"
+              - option "Mean Reversion (Bollinger Bands)"
+              - option "Swing Trading"
+          - generic [ref=e63]:
+            - generic [ref=e64]: Symbol
+            - combobox "Symbol" [ref=e65]:
+              - option "BTC/USDT" [selected]
+              - option "ETH/USDT"
+              - option "BNB/USDT"
+              - option "SOL/USDT"
+              - option "ADA/USDT"
+              - option "XRP/USDT"
+          - generic [ref=e66]:
+            - generic [ref=e67]: Timeframe
+            - combobox "Timeframe" [ref=e68]:
+              - option "1m"
+              - option "5m"
+              - option "15m"
+              - option "1h" [selected]
+              - option "4h"
+              - option "1d"
+          - generic [ref=e69]:
+            - generic [ref=e70]: Start Date
+            - textbox "Start Date" [ref=e71]
+          - generic [ref=e72]:
+            - generic [ref=e73]: End Date
+            - textbox "End Date" [ref=e74]
+          - generic [ref=e75]:
+            - generic [ref=e76]: Initial Capital (USD)
+            - spinbutton "Initial Capital (USD)" [ref=e77]: "10000"
+        - button "Run Backtest" [ref=e79] [cursor=pointer]:
+          - img [ref=e80]
+          - text: Run Backtest

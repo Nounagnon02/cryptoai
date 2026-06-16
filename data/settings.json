@@ -1,0 +1,34 @@
+{
+  "strategies": [
+    {
+      "name": "trend_following",
+      "label": "Trend Following",
+      "enabled": true,
+      "allocation": 40.0
+    },
+    {
+      "name": "momentum",
+      "label": "Momentum",
+      "enabled": true,
+      "allocation": 30.0
+    },
+    {
+      "name": "mean_reversion",
+      "label": "Mean Reversion",
+      "enabled": false,
+      "allocation": 15.0
+    },
+    {
+      "name": "swing_trading",
+      "label": "Swing Trading",
+      "enabled": true,
+      "allocation": 30.0
+    }
+  ],
+  "risk": {
+    "max_drawdown_pct": 20.0,
+    "max_position_size_pct": 12.0
+  },
+  "trading_mode": "paper",
+  "api_keys": []
+}

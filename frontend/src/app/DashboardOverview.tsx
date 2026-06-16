@@ -19,12 +19,15 @@ import {
   getLiveExecutionStats,
   getRecentDecisions,
   getMarketOverview,
+  getScreener,
+  getSettings,
   PortfolioSummary,
   PerformanceSummary,
   AIScore,
   DecisionRecord,
   MarketOverview,
   MarketSymbolData,
+  ScreenerItem,
 } from "@/lib/api";
 
 function formatUSD(value: number): string {
@@ -83,16 +86,45 @@ export default function DashboardOverview() {
     refetchInterval: 15_000,
   });
 
+  const { data: screener } = useQuery<{ top_gainers: ScreenerItem[]; top_losers: ScreenerItem[] } | null>({
+    queryKey: ["screener"],
+    queryFn: async () => {
+      const result = await getScreener(5);
+      return result as { top_gainers: ScreenerItem[]; top_losers: ScreenerItem[] } | null;
+    },
+    refetchInterval: 30_000,
+  });
+
+  const { data: settings } = useQuery<{ trading_mode: string } | null>({
+    queryKey: ["settings-mode"],
+    queryFn: async () => {
+      const res = await getSettings();
+      return res ? { trading_mode: res.trading_mode } : null;
+    },
+    refetchInterval: 60_000,
+  });
+
+  const tradingMode = settings?.trading_mode || "paper";
   const topSymbols = marketOv?.symbols?.filter(s => s.ticker !== null).slice(0, 4) ?? [];
 
   return (
     <div className="space-y-6">
       {/* Page header */}
-      <div>
-        <h1 className="text-2xl font-bold text-white">Dashboard</h1>
-        <p className="text-sm text-gray-400 mt-1">
-          Live paper trading · Données Binace mises à jour toutes les 10s
-        </p>
+      <div className="flex items-center justify-between">
+        <div>
+          <h1 className="text-2xl font-bold text-white">Dashboard</h1>
+          <p className="text-sm text-gray-400 mt-1">
+            Live {tradingMode === "live" ? "trading" : "paper trading"} · Données Binance mises à jour toutes les 10s
+          </p>
+        </div>
+        <div className={`flex items-center gap-2 px-3 py-1.5 rounded-full text-xs font-bold ${
+          tradingMode === "live"
+            ? "bg-red-500/10 border border-red-500/30 text-red-400"
+            : "bg-green-500/10 border border-green-500/30 text-green-400"
+        }`}>
+          <span className={`w-2 h-2 rounded-full ${tradingMode === "live" ? "bg-red-400 animate-pulse" : "bg-green-400"}`} />
+          {tradingMode === "live" ? "LIVE 🔴" : "PAPER 🟢"}
+        </div>
       </div>
 
       {/* Live market prices row */}
@@ -115,6 +147,57 @@ export default function DashboardOverview() {
               </span>
             </div>
           ))}
+        </div>
+      )}
+
+      {/* Top Movers */}
+      {(screener?.top_gainers?.length ?? 0) > 0 && (
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+          {/* Top Gainers */}
+          <div className="card">
+            <h3 className="text-sm font-medium text-green-400 mb-3 flex items-center gap-2">
+              <TrendingUp className="h-4 w-4" />
+              Top Gainers 24h
+            </h3>
+            <div className="space-y-2">
+              {screener?.top_gainers?.slice(0, 5).map((item: ScreenerItem) => (
+                <div key={item.symbol} className="flex items-center justify-between text-sm">
+                  <span className="text-white font-medium">{item.symbol.replace("/USDT", "")}</span>
+                  <div className="flex items-center gap-3">
+                    <span className="text-gray-300 tabular-nums">
+                      ${item.last_price.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                    </span>
+                    <span className="text-green-400 tabular-nums font-medium w-16 text-right">
+                      +{item.change_24h_pct.toFixed(1)}%
+                    </span>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          {/* Top Losers */}
+          <div className="card">
+            <h3 className="text-sm font-medium text-red-400 mb-3 flex items-center gap-2">
+              <TrendingUp className="h-4 w-4 rotate-180" />
+              Top Losers 24h
+            </h3>
+            <div className="space-y-2">
+              {screener?.top_losers?.slice(0, 5).map((item: ScreenerItem) => (
+                <div key={item.symbol} className="flex items-center justify-between text-sm">
+                  <span className="text-white font-medium">{item.symbol.replace("/USDT", "")}</span>
+                  <div className="flex items-center gap-3">
+                    <span className="text-gray-300 tabular-nums">
+                      ${item.last_price.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                    </span>
+                    <span className="text-red-400 tabular-nums font-medium w-16 text-right">
+                      {item.change_24h_pct.toFixed(1)}%
+                    </span>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
         </div>
       )}
 

@@ -48,16 +48,10 @@ export default function PerformancePage() {
     refetchInterval: 60_000,
   });
 
-  // Generate monthly mock data for the bar chart
-  // In production this would come from the backend
-  const monthlyData = [
-    { month: "Jan", return: 2.4 },
-    { month: "Feb", return: -1.2 },
-    { month: "Mar", return: 3.8 },
-    { month: "Apr", return: 1.5 },
-    { month: "May", return: -0.8 },
-    { month: "Jun", return: 2.1 },
-  ];
+  const monthlyData = (perf?.monthly_returns ?? []).map((m) => ({
+    month: m.month,
+    return: m.return_pct,
+  }));
 
   if (isLoading) {
     return (

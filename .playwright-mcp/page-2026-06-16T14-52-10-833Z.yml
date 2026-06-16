@@ -1,0 +1,58 @@
+- generic [ref=e2]:
+  - navigation "Main navigation" [ref=e3]:
+    - generic [ref=e4]:
+      - img [ref=e6]
+      - generic [ref=e8]:
+        - heading "CryptoAI" [level=1] [ref=e9]
+        - paragraph [ref=e10]: Trading Platform
+    - navigation "Sidebar" [ref=e11]:
+      - link "Dashboard" [ref=e12] [cursor=pointer]:
+        - /url: /
+        - img [ref=e13]
+        - text: Dashboard
+      - link "Portfolio" [ref=e18] [cursor=pointer]:
+        - /url: /portfolio
+        - img [ref=e19]
+        - text: Portfolio
+      - link "Performance" [ref=e22] [cursor=pointer]:
+        - /url: /performance
+        - img [ref=e23]
+        - text: Performance
+      - link "Backtest" [ref=e26] [cursor=pointer]:
+        - /url: /backtest
+        - img [ref=e27]
+        - text: Backtest
+      - link "Trades" [ref=e29] [cursor=pointer]:
+        - /url: /trades
+        - img [ref=e30]
+        - text: Trades
+      - link "Settings" [ref=e34] [cursor=pointer]:
+        - /url: /settings
+        - img [ref=e35]
+        - text: Settings
+    - generic [ref=e38]:
+      - button "Switch to light theme" [ref=e39] [cursor=pointer]:
+        - img [ref=e40]
+        - generic [ref=e46]: Light Mode
+      - generic [ref=e51]: System Operational
+  - main [ref=e52]:
+    - generic [ref=e53]:
+      - generic [ref=e54]:
+        - heading "Portfolio" [level=1] [ref=e55]
+        - paragraph [ref=e56]: Positions, allocations et exposition
+      - generic [ref=e57]:
+        - generic [ref=e58]:
+          - paragraph [ref=e59]: Total Value
+          - paragraph [ref=e60]: —
+        - generic [ref=e61]:
+          - paragraph [ref=e62]: Cash Remaining
+          - paragraph [ref=e63]: —
+        - generic [ref=e64]:
+          - paragraph [ref=e65]: Drawdown
+          - paragraph [ref=e66]: —
+        - generic [ref=e67]:
+          - paragraph [ref=e68]: Risk Status
+          - generic [ref=e73]: Safe
+      - generic [ref=e81]:
+        - heading "Strategy Allocation" [level=3] [ref=e82]
+        - generic [ref=e83]: No allocations

@@ -1,0 +1,45 @@
+- generic [ref=e2]:
+  - navigation "Main navigation" [ref=e3]:
+    - generic [ref=e4]:
+      - img [ref=e6]
+      - generic [ref=e8]:
+        - heading "CryptoAI" [level=1] [ref=e9]
+        - paragraph [ref=e10]: Trading Platform
+    - navigation "Sidebar" [ref=e11]:
+      - link "Dashboard" [ref=e12] [cursor=pointer]:
+        - /url: /
+        - img [ref=e13]
+        - text: Dashboard
+      - link "Portfolio" [ref=e18] [cursor=pointer]:
+        - /url: /portfolio
+        - img [ref=e19]
+        - text: Portfolio
+      - link "Performance" [ref=e22] [cursor=pointer]:
+        - /url: /performance
+        - img [ref=e23]
+        - text: Performance
+      - link "Backtest" [ref=e26] [cursor=pointer]:
+        - /url: /backtest
+        - img [ref=e27]
+        - text: Backtest
+      - link "Trades" [ref=e29] [cursor=pointer]:
+        - /url: /trades
+        - img [ref=e30]
+        - text: Trades
+      - link "Settings" [ref=e34] [cursor=pointer]:
+        - /url: /settings
+        - img [ref=e35]
+        - text: Settings
+    - generic [ref=e38]:
+      - button "Switch to light theme" [ref=e39] [cursor=pointer]:
+        - img [ref=e40]
+        - generic [ref=e46]: Light Mode
+      - generic [ref=e51]: System Operational
+  - main [ref=e52]:
+    - generic [ref=e53]:
+      - generic [ref=e54]:
+        - generic [ref=e55]:
+          - heading "Dashboard" [level=1] [ref=e56]
+          - paragraph [ref=e57]: Live paper trading · Données Binance mises à jour toutes les 10s
+        - generic [ref=e58]: PAPER 🟢
+      - heading "Recent AI Decisions" [level=3] [ref=e88]

@@ -83,6 +83,37 @@
   }
 }
 
+/* ─── Light Theme ─────────────────────────────────────────── */
+html.light {
+  --bg-primary: #f5f5f7;
+  --bg-card: #ffffff;
+  --bg-hover: #e8e8ed;
+  --border-color: #d1d1d6;
+  --text-primary: #1d1d1f;
+  --text-secondary: #6e6e73;
+}
+
+html.light body {
+  @apply bg-surface text-gray-900;
+}
+
+html.light .card {
+  @apply bg-surface-card border-surface-border;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
+}
+
+html.light .card:hover {
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.1);
+}
+
+html.light .btn-primary {
+  @apply text-white;
+}
+
+html.light .input {
+  @apply text-gray-900 placeholder-gray-400 bg-white;
+}
+
 /* ─── Reduced Motion (Accessibility) ─────────────────────── */
 @media (prefers-reduced-motion: reduce) {
   *,

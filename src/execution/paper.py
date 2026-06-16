@@ -313,6 +313,62 @@ class PaperExchange(BaseConnector):
             sharpe_ratio=round(sharpe, 2),
         )
 
+    def get_trade_history(
+        self, limit: int = 50, symbol: str | None = None
+    ) -> list[dict[str, Any]]:
+        """Retourne l'historique complet des trades (ouverts et fermés)."""
+        trades: list[dict[str, Any]] = []
+
+        # Positions ouvertes
+        for pos in self._positions.values():
+            if symbol and pos.symbol != symbol:
+                continue
+            trades.append({
+                "trade_id": pos.trade_id,
+                "symbol": pos.symbol,
+                "side": pos.side,
+                "quantity": pos.quantity,
+                "price": pos.price,
+                "value_usd": pos.value_usd,
+                "fee": pos.fee,
+                "pnl": pos.pnl,
+                "pnl_pct": pos.pnl_pct,
+                "timestamp": pos.timestamp,
+                "timestamp_formatted": datetime.fromtimestamp(pos.timestamp, UTC).isoformat(),
+                "strategy": pos.strategy,
+                "status": pos.status,
+            })
+
+        # Trades fermés
+        for trade in self._closed_trades:
+            if symbol and trade.symbol != symbol:
+                continue
+            trades.append({
+                "trade_id": trade.trade_id,
+                "symbol": trade.symbol,
+                "side": trade.side,
+                "quantity": trade.quantity,
+                "price": trade.price,
+                "value_usd": trade.value_usd,
+                "fee": trade.fee,
+                "pnl": trade.pnl,
+                "pnl_pct": trade.pnl_pct,
+                "timestamp": trade.timestamp,
+                "timestamp_formatted": datetime.fromtimestamp(trade.timestamp, UTC).isoformat(),
+                "strategy": trade.strategy,
+                "status": trade.status,
+                "close_price": trade.close_price,
+                "close_timestamp": trade.close_timestamp,
+            })
+
+        # Trier par timestamp décroissant
+        trades.sort(key=lambda t: t["timestamp"], reverse=True)
+        return trades[:limit]
+
+    def get_trade_count(self) -> int:
+        """Nombre total de trades (ouverts + fermés)."""
+        return len(self._positions) + len(self._closed_trades)
+
     def get_summary(self) -> dict[str, Any]:
         """Résumé formaté pour le dashboard."""
         state = self.get_state()

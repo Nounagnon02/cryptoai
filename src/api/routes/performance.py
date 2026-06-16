@@ -15,6 +15,11 @@ class EquityPoint(BaseModel):
     equity: float
 
 
+class MonthlyReturn(BaseModel):
+    month: str
+    return_pct: float
+
+
 class PerformanceSummary(BaseModel):
     sharpe_ratio: float
     sortino_ratio: float
@@ -25,6 +30,7 @@ class PerformanceSummary(BaseModel):
     cagr: float
     total_return_pct: float
     equity_curve: list[EquityPoint]
+    monthly_returns: list[MonthlyReturn] = []
 
 
 def _generate_mock_equity_curve() -> list[EquityPoint]:
@@ -38,6 +44,24 @@ def _generate_mock_equity_curve() -> list[EquityPoint]:
         equity = round(base * variation, 2)
         curve.append(EquityPoint(timestamp=day.isoformat(), equity=equity))
     return curve
+
+
+def _generate_monthly_returns() -> list[MonthlyReturn]:
+    """Genere les rendements mensuels simules."""
+    return [
+        MonthlyReturn(month="Jan", return_pct=2.4),
+        MonthlyReturn(month="Feb", return_pct=-1.2),
+        MonthlyReturn(month="Mar", return_pct=3.8),
+        MonthlyReturn(month="Apr", return_pct=1.5),
+        MonthlyReturn(month="May", return_pct=-0.8),
+        MonthlyReturn(month="Jun", return_pct=2.1),
+        MonthlyReturn(month="Jul", return_pct=3.2),
+        MonthlyReturn(month="Aug", return_pct=-0.5),
+        MonthlyReturn(month="Sep", return_pct=1.8),
+        MonthlyReturn(month="Oct", return_pct=2.9),
+        MonthlyReturn(month="Nov", return_pct=-1.5),
+        MonthlyReturn(month="Dec", return_pct=4.1),
+    ]
 
 
 @router.get("/summary", response_model=PerformanceSummary)
@@ -64,6 +88,7 @@ async def get_performance_summary():
                 cagr=round(total_return, 1),
                 total_return_pct=round(total_return, 1),
                 equity_curve=curve,
+                monthly_returns=_generate_monthly_returns(),
             )
         except Exception:
             pass
@@ -77,4 +102,5 @@ async def get_performance_summary():
         cagr=18.3,
         total_return_pct=22.7,
         equity_curve=_generate_mock_equity_curve(),
+        monthly_returns=_generate_monthly_returns(),
     )

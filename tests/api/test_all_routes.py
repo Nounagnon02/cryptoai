@@ -49,7 +49,7 @@ def test_execution_stats():
     assert "total_orders" in data
 
 def test_route_not_found():
-    r = client.get("/api/v1/nonexistent")
+    r = client.get("/api/v1/market/nonexistent_endpoint_xyz")
     assert r.status_code == 404
 
 def test_cors_headers():

@@ -9,7 +9,12 @@ import {
   TrendingUp,
   Settings,
   Activity,
+  History,
+  Sun,
+  Moon,
+  FlaskConical,
 } from "lucide-react";
+import { useTheme } from "@/app/providers";
 
 interface NavItem {
   label: string;
@@ -21,11 +26,14 @@ const navItems: NavItem[] = [
   { label: "Dashboard", href: "/", icon: LayoutDashboard },
   { label: "Portfolio", href: "/portfolio", icon: PieChart },
   { label: "Performance", href: "/performance", icon: TrendingUp },
+  { label: "Backtest", href: "/backtest", icon: FlaskConical },
+  { label: "Trades", href: "/trades", icon: History },
   { label: "Settings", href: "/settings", icon: Settings },
 ];
 
 export default function Sidebar() {
   const pathname = usePathname();
+  const { theme, toggleTheme } = useTheme();
 
   return (
     <aside
@@ -68,8 +76,23 @@ export default function Sidebar() {
         })}
       </nav>
 
-      {/* Status indicator */}
-      <div className="px-6 py-4 border-t border-surface-border">
+      {/* Bottom section: theme toggle + status */}
+      <div className="px-6 py-4 border-t border-surface-border space-y-3">
+        {/* Theme toggle */}
+        <button
+          onClick={toggleTheme}
+          className="flex items-center gap-2 w-full text-xs text-gray-400 hover:text-gray-200 transition-colors"
+          aria-label={`Switch to ${theme === "dark" ? "light" : "dark"} theme`}
+        >
+          {theme === "dark" ? (
+            <Sun className="h-4 w-4" aria-hidden="true" />
+          ) : (
+            <Moon className="h-4 w-4" aria-hidden="true" />
+          )}
+          <span>{theme === "dark" ? "Light Mode" : "Dark Mode"}</span>
+        </button>
+
+        {/* Status indicator */}
         <div className="flex items-center gap-2">
           <span className="relative flex h-2.5 w-2.5">
             <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-crypto-green opacity-75" />

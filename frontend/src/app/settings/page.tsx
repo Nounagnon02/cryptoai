@@ -1,39 +1,47 @@
 "use client";
 
-import { useState } from "react";
-import { Save, Eye, EyeOff, AlertTriangle } from "lucide-react";
+import { useState, useEffect } from "react";
+import {
+  Save, AlertTriangle, Shield, Key, Trash2, Play, CheckCircle, XCircle, RefreshCw,
+} from "lucide-react";
+import {
+  getSettings, updateSettings, addApiKey as saveApiKey, deleteApiKey, testApiKey,
+  StrategySetting, RiskSetting, ApiKeySetting,
+} from "@/lib/api";
 
-interface StrategyConfig {
-  name: string;
-  label: string;
-  enabled: boolean;
-  allocation: number;
-}
-
-interface ApiKeyEntry {
-  exchange: string;
-  key: string;
-  masked: boolean;
-}
-
-const defaultStrategies: StrategyConfig[] = [
-  { name: "trend_following", label: "Trend Following", enabled: true, allocation: 30 },
-  { name: "momentum", label: "Momentum", enabled: true, allocation: 25 },
-  { name: "mean_reversion", label: "Mean Reversion", enabled: false, allocation: 20 },
-  { name: "swing_trading", label: "Swing Trading", enabled: true, allocation: 25 },
-];
-
-const defaultApiKeys: ApiKeyEntry[] = [
-  { exchange: "Binance", key: "sk-••••••••••••••••", masked: true },
-  { exchange: "Bybit", key: "sk-••••••••••••••••", masked: true },
-];
+const EXCHANGES = ["binance", "bybit", "coinbase", "kraken", "kucoin"];
 
 export default function SettingsPage() {
-  const [strategies, setStrategies] = useState<StrategyConfig[]>(defaultStrategies);
-  const [apiKeys, setApiKeys] = useState<ApiKeyEntry[]>(defaultApiKeys);
-  const [maxDrawdown, setMaxDrawdown] = useState(25);
-  const [maxPositionSize, setMaxPositionSize] = useState(10);
+  const [strategies, setStrategies] = useState<StrategySetting[]>([]);
+  const [risk, setRisk] = useState<RiskSetting>({ max_drawdown_pct: 25, max_position_size_pct: 10 });
+  const [apiKeys, setApiKeys] = useState<ApiKeySetting[]>([]);
+  const [tradingMode, setTradingMode] = useState("paper");
   const [saved, setSaved] = useState(false);
+  const [loading, setLoading] = useState(true);
+
+  // API Key form
+  const [addExchange, setAddExchange] = useState("binance");
+  const [addApiKey, setAddApiKey] = useState("");
+  const [addApiSecret, setAddApiSecret] = useState("");
+  const [keySubmitting, setKeySubmitting] = useState(false);
+  const [keyDeleting, setKeyDeleting] = useState<string | null>(null);
+  const [testResult, setTestResult] = useState<{ success: boolean; message: string } | null>(null);
+  const [testing, setTesting] = useState(false);
+
+  // Confirm live mode
+  const [showLiveConfirm, setShowLiveConfirm] = useState(false);
+
+  useEffect(() => {
+    getSettings().then((data) => {
+      if (data) {
+        setStrategies(data.strategies);
+        setRisk(data.risk);
+        setApiKeys(data.api_keys);
+        setTradingMode(data.trading_mode || "paper");
+      }
+      setLoading(false);
+    });
+  }, []);
 
   function toggleStrategy(name: string) {
     setStrategies((prev) =>
@@ -47,27 +55,181 @@ export default function SettingsPage() {
     );
   }
 
-  function toggleMask(idx: number) {
-    setApiKeys((prev) =>
-      prev.map((k, i) => (i === idx ? { ...k, masked: !k.masked } : k))
-    );
-  }
-
-  function handleSave() {
+  async function handleSave() {
+    await updateSettings({ strategies, risk, trading_mode: tradingMode });
     setSaved(true);
     setTimeout(() => setSaved(false), 2000);
   }
 
+  async function handleToggleMode() {
+    if (tradingMode === "paper") {
+      // Going to live — show confirmation
+      setShowLiveConfirm(true);
+      return;
+    }
+    // Going back to paper
+    const newMode = "paper";
+    setTradingMode(newMode);
+    await updateSettings({ trading_mode: newMode });
+    setSaved(true);
+    setTimeout(() => setSaved(false), 2000);
+  }
+
+  async function confirmLiveMode() {
+    const newMode = "live";
+    setTradingMode(newMode);
+    setShowLiveConfirm(false);
+    await updateSettings({ trading_mode: newMode });
+    setSaved(true);
+    setTimeout(() => setSaved(false), 2000);
+  }
+
+  async function handleAddKey() {
+    if (!addApiKey || !addApiSecret) return;
+    setKeySubmitting(true);
+    const result = await saveApiKey({
+      exchange: addExchange,
+      api_key: addApiKey,
+      api_secret: addApiSecret,
+    });
+    if (result) {
+      setApiKeys(result.api_keys);
+      setAddApiKey("");
+      setAddApiSecret("");
+    }
+    setKeySubmitting(false);
+  }
+
+  async function handleDeleteKey(exchange: string) {
+    setKeyDeleting(exchange);
+    const result = await deleteApiKey(exchange);
+    if (result) {
+      setApiKeys(result.api_keys);
+    }
+    setKeyDeleting(null);
+  }
+
+  async function handleTestConnection() {
+    if (!addApiKey || !addApiSecret) return;
+    setTesting(true);
+    setTestResult(null);
+    const result = await testApiKey(addExchange, addApiKey, addApiSecret);
+    setTestResult(result ? { success: result.success, message: result.message } : { success: false, message: "Test request failed" });
+    setTesting(false);
+  }
+
   const totalAllocation = strategies.reduce((sum, s) => sum + (s.enabled ? s.allocation : 0), 0);
+
+  if (loading) {
+    return (
+      <div className="space-y-6 max-w-3xl">
+        <div>
+          <div className="h-7 bg-surface-hover rounded w-48 mb-2 animate-pulse" />
+          <div className="h-4 bg-surface-hover rounded w-64 animate-pulse" />
+        </div>
+        {Array.from({ length: 3 }).map((_, i) => (
+          <div key={i} className="card animate-pulse h-40" />
+        ))}
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6 max-w-3xl">
-      <div>
-        <h1 className="text-2xl font-bold text-white">Settings</h1>
-        <p className="text-sm text-gray-400 mt-1">
-          Configuration des stratégies et paramètres de risque
-        </p>
+      <div className="flex items-center justify-between">
+        <div>
+          <h1 className="text-2xl font-bold text-white">Settings</h1>
+          <p className="text-sm text-gray-400 mt-1">
+            Configuration des stratégies et paramètres de risque
+          </p>
+        </div>
+        {/* Trading mode badge */}
+        <div className={`flex items-center gap-2 px-3 py-1.5 rounded-full text-xs font-bold ${
+          tradingMode === "live"
+            ? "bg-red-500/10 border border-red-500/30 text-red-400 animate-pulse"
+            : "bg-green-500/10 border border-green-500/30 text-green-400"
+        }`}>
+          <span className={`w-2 h-2 rounded-full ${tradingMode === "live" ? "bg-red-400" : "bg-green-400"}`} />
+          {tradingMode === "live" ? "🔴 LIVE TRADING" : "🟢 PAPER TRADING"}
+        </div>
       </div>
+
+      {/* ── Trading Mode ── */}
+      <div className="card">
+        <div className="flex items-start gap-3">
+          <Shield className={`h-5 w-5 mt-0.5 ${tradingMode === "live" ? "text-red-400" : "text-green-400"}`} />
+          <div className="flex-1">
+            <h3 className="text-sm font-medium text-white">Trading Mode</h3>
+            <p className="text-xs text-gray-500 mt-1">
+              {tradingMode === "paper"
+                ? "Paper trading uses simulated execution. No real funds at risk."
+                : "Live trading uses real exchange credentials with actual funds."}
+            </p>
+            <button
+              onClick={handleToggleMode}
+              className={`mt-3 relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-crypto-blue focus:ring-offset-2 focus:ring-offset-surface-card ${
+                tradingMode === "live" ? "bg-red-500" : "bg-surface-border"
+              }`}
+              role="switch"
+              aria-checked={tradingMode === "live"}
+              aria-label="Toggle trading mode"
+            >
+              <span
+                className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
+                  tradingMode === "live" ? "translate-x-[26px]" : "translate-x-[3px]"
+                }`}
+              />
+            </button>
+          </div>
+        </div>
+
+        {tradingMode === "live" && (
+          <div className="mt-4 p-3 rounded-lg bg-red-500/10 border border-red-500/30">
+            <div className="flex items-center gap-2">
+              <AlertTriangle className="h-4 w-4 text-red-400 flex-shrink-0" />
+              <p className="text-xs text-red-400 font-medium">
+                ⚠️ LIVE TRADING ACTIVE — Real funds are at risk. Ensure API keys have appropriate permissions and daily withdrawal limits are set.
+              </p>
+            </div>
+          </div>
+        )}
+      </div>
+
+      {/* Live mode confirmation modal */}
+      {showLiveConfirm && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60">
+          <div className="card max-w-md mx-4 border border-red-500/30">
+            <div className="flex items-center gap-3 mb-4">
+              <AlertTriangle className="h-6 w-6 text-red-400" />
+              <h3 className="text-lg font-bold text-white">Enable Live Trading?</h3>
+            </div>
+            <p className="text-sm text-gray-400 mb-4">
+              You are about to switch from paper trading to <span className="text-red-400 font-semibold">LIVE TRADING</span>.
+              This will execute real trades using your exchange API keys with real funds.
+            </p>
+            <ul className="text-xs text-gray-500 space-y-2 mb-4">
+              <li>• Verify your API keys have correct permissions</li>
+              <li>• Set daily withdrawal limits on your exchange</li>
+              <li>• Start with small position sizes</li>
+              <li>• Monitor the system closely for the first 24h</li>
+            </ul>
+            <div className="flex gap-3">
+              <button
+                onClick={() => setShowLiveConfirm(false)}
+                className="flex-1 px-4 py-2 rounded-lg bg-surface-hover text-gray-300 text-sm font-medium hover:bg-surface-border transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={confirmLiveMode}
+                className="flex-1 px-4 py-2 rounded-lg bg-red-500 text-white text-sm font-medium hover:bg-red-600 transition-colors"
+              >
+                I Understand — Enable Live
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Strategy config */}
       <div className="card">
@@ -127,19 +289,18 @@ export default function SettingsPage() {
       <div className="card">
         <h3 className="text-sm font-medium text-gray-400 mb-4">Risk Parameters</h3>
         <div className="space-y-6">
-          {/* Max drawdown slider */}
           <div>
             <div className="flex justify-between mb-2">
               <label className="label" htmlFor="max-drawdown">Max Drawdown</label>
-              <span className="text-sm font-bold text-crypto-red tabular-nums">{maxDrawdown}%</span>
+              <span className="text-sm font-bold text-crypto-red tabular-nums">{risk.max_drawdown_pct}%</span>
             </div>
             <input
               id="max-drawdown"
               type="range"
               min={5}
               max={50}
-              value={maxDrawdown}
-              onChange={(e) => setMaxDrawdown(Number(e.target.value))}
+              value={risk.max_drawdown_pct}
+              onChange={(e) => setRisk((r) => ({ ...r, max_drawdown_pct: Number(e.target.value) }))}
               className="w-full h-1.5 bg-surface-border rounded-lg appearance-none cursor-pointer
                          accent-crypto-red focus:outline-none focus:ring-2 focus:ring-crypto-blue"
               aria-label="Maximum drawdown percentage"
@@ -150,19 +311,18 @@ export default function SettingsPage() {
             </div>
           </div>
 
-          {/* Max position size */}
           <div>
             <div className="flex justify-between mb-2">
               <label className="label" htmlFor="max-position">Max Position Size</label>
-              <span className="text-sm font-bold text-crypto-blue tabular-nums">{maxPositionSize}%</span>
+              <span className="text-sm font-bold text-crypto-blue tabular-nums">{risk.max_position_size_pct}%</span>
             </div>
             <input
               id="max-position"
               type="range"
               min={2}
               max={30}
-              value={maxPositionSize}
-              onChange={(e) => setMaxPositionSize(Number(e.target.value))}
+              value={risk.max_position_size_pct}
+              onChange={(e) => setRisk((r) => ({ ...r, max_position_size_pct: Number(e.target.value) }))}
               className="w-full h-1.5 bg-surface-border rounded-lg appearance-none cursor-pointer
                          accent-crypto-blue focus:outline-none focus:ring-2 focus:ring-crypto-blue"
               aria-label="Maximum position size percentage"
@@ -175,33 +335,138 @@ export default function SettingsPage() {
         </div>
       </div>
 
-      {/* API Keys */}
+      {/* ── API Key Management ── */}
       <div className="card">
-        <h3 className="text-sm font-medium text-gray-400 mb-4">Exchange API Keys</h3>
+        <div className="flex items-center gap-2 mb-4">
+          <Key className="h-4 w-4 text-gray-400" />
+          <h3 className="text-sm font-medium text-gray-400">Exchange API Keys</h3>
+        </div>
         <p className="text-xs text-gray-500 mb-4">
-          Keys are encrypted at rest (AES-256-GCM) and never logged.
+          Keys are encrypted at rest (AES-256-GCM) and never logged. Use API keys with trading permissions restricted to your IP.
         </p>
-        <div className="space-y-3">
-          {apiKeys.map((entry, i) => (
-            <div
-              key={entry.exchange}
-              className="flex items-center justify-between py-2 border-b border-surface-border last:border-0"
-            >
-              <span className="text-sm font-medium text-white">{entry.exchange}</span>
-              <div className="flex items-center gap-2">
-                <code className="text-xs text-gray-400 font-mono">
-                  {entry.masked ? entry.key : "sk-revealed-••••••••••••"}
-                </code>
-                <button
-                  onClick={() => toggleMask(i)}
-                  className="p-1 text-gray-500 hover:text-gray-300 transition-colors"
-                  aria-label={entry.masked ? "Show API key" : "Hide API key"}
-                >
-                  {entry.masked ? <Eye className="h-3.5 w-3.5" /> : <EyeOff className="h-3.5 w-3.5" />}
-                </button>
+
+        {/* Existing keys */}
+        <div className="space-y-2 mb-6">
+          {apiKeys.length === 0 ? (
+            <p className="text-xs text-gray-500 italic">No API keys configured</p>
+          ) : (
+            apiKeys.map((entry) => (
+              <div
+                key={entry.exchange}
+                className="flex items-center justify-between py-2 px-3 rounded-lg bg-surface/40 border border-surface-border"
+              >
+                <div>
+                  <span className="text-sm font-medium text-white capitalize">{entry.exchange}</span>
+                  {entry.has_key && (
+                    <code className="ml-2 text-xs text-gray-500 font-mono">{entry.key_preview || "••••••••••••••••"}</code>
+                  )}
+                </div>
+                <div className="flex items-center gap-2">
+                  <span className={entry.has_key ? "text-xs text-crypto-green" : "text-xs text-gray-500"}>
+                    {entry.has_key ? "✓ Connected" : "— Not set"}
+                  </span>
+                  <button
+                    onClick={() => handleDeleteKey(entry.exchange)}
+                    disabled={keyDeleting === entry.exchange}
+                    className="p-1 rounded hover:bg-red-500/10 text-gray-500 hover:text-red-400 transition-colors"
+                    aria-label={`Delete ${entry.exchange} API key`}
+                  >
+                    {keyDeleting === entry.exchange ? (
+                      <RefreshCw className="h-3.5 w-3.5 animate-spin" />
+                    ) : (
+                      <Trash2 className="h-3.5 w-3.5" />
+                    )}
+                  </button>
+                </div>
               </div>
+            ))
+          )}
+        </div>
+
+        {/* Add new key form */}
+        <div className="border-t border-surface-border pt-4">
+          <h4 className="text-xs font-medium text-gray-400 mb-3">Add / Update Key</h4>
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mb-3">
+            <div>
+              <label className="label" htmlFor="key-exchange">Exchange</label>
+              <select
+                id="key-exchange"
+                value={addExchange}
+                onChange={(e) => setAddExchange(e.target.value)}
+                className="input"
+              >
+                {EXCHANGES.map((ex) => (
+                  <option key={ex} value={ex}>{ex.charAt(0).toUpperCase() + ex.slice(1)}</option>
+                ))}
+              </select>
             </div>
-          ))}
+            <div>
+              <label className="label" htmlFor="key-api-key">API Key</label>
+              <input
+                id="key-api-key"
+                type="password"
+                value={addApiKey}
+                onChange={(e) => setAddApiKey(e.target.value)}
+                className="input"
+                placeholder="Enter API key"
+                autoComplete="off"
+              />
+            </div>
+            <div>
+              <label className="label" htmlFor="key-api-secret">API Secret</label>
+              <input
+                id="key-api-secret"
+                type="password"
+                value={addApiSecret}
+                onChange={(e) => setAddApiSecret(e.target.value)}
+                className="input"
+                placeholder="Enter API secret"
+                autoComplete="off"
+              />
+            </div>
+          </div>
+
+          {testResult && (
+            <div className={`flex items-center gap-2 p-3 rounded-lg text-xs mb-3 ${
+              testResult.success
+                ? "bg-green-500/10 border border-green-500/30 text-green-400"
+                : "bg-red-500/10 border border-red-500/30 text-red-400"
+            }`}>
+              {testResult.success ? (
+                <CheckCircle className="h-4 w-4 flex-shrink-0" />
+              ) : (
+                <XCircle className="h-4 w-4 flex-shrink-0" />
+              )}
+              {testResult.message}
+            </div>
+          )}
+
+          <div className="flex items-center gap-2">
+            <button
+              onClick={handleAddKey}
+              disabled={keySubmitting || !addApiKey || !addApiSecret}
+              className="btn-primary inline-flex items-center gap-2 text-xs"
+            >
+              {keySubmitting ? (
+                <RefreshCw className="h-3.5 w-3.5 animate-spin" />
+              ) : (
+                <Key className="h-3.5 w-3.5" />
+              )}
+              Save Key
+            </button>
+            <button
+              onClick={handleTestConnection}
+              disabled={testing || !addApiKey || !addApiSecret}
+              className="px-3 py-2 bg-surface-hover text-gray-300 rounded-lg text-xs font-medium hover:bg-surface-border transition-colors inline-flex items-center gap-2"
+            >
+              {testing ? (
+                <RefreshCw className="h-3.5 w-3.5 animate-spin" />
+              ) : (
+                <Play className="h-3.5 w-3.5" />
+              )}
+              Test Connection
+            </button>
+          </div>
         </div>
       </div>
 
